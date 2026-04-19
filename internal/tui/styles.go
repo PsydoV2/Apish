@@ -33,8 +33,18 @@ var subtitleStyle = lipgloss.NewStyle().
 	Foreground(colorMuted)
 
 var helpStyle = lipgloss.NewStyle().
-	Foreground(colorMuted).
-	Italic(true)
+	Foreground(colorMuted)
+
+// keyStyle: der Key selbst — Badge mit Rounded Border und Padding
+var keyStyle = lipgloss.NewStyle().
+	Foreground(colorText).
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(colorBorder).
+	Padding(0, 1)
+
+// keyDescStyle: die Beschreibung zum Key — gedimmt
+var keyDescStyle = lipgloss.NewStyle().
+	Foreground(colorMuted)
 
 // --- Menü ---
 
@@ -58,6 +68,18 @@ var labelStyle = lipgloss.NewStyle().
 var loadingStyle = lipgloss.NewStyle().
 	Foreground(colorYellow).
 	Italic(true)
+
+// methodActiveStyle: die aktuell gewählte HTTP-Methode
+var methodActiveStyle = lipgloss.NewStyle().
+	Foreground(colorText).
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(colorPrimary).
+	Padding(0, 1)
+
+// methodInactiveStyle: alle anderen Methoden
+var methodInactiveStyle = lipgloss.NewStyle().
+	Foreground(colorMuted).
+	Padding(0, 1)
 
 // --- Response ---
 

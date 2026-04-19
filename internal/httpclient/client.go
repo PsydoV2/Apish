@@ -4,41 +4,55 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
 // Response kapselt alles was wir von einem HTTP-Call zurückbekommen.
-// Exportierte Felder (Großbuchstabe) sind von außen lesbar.
 type Response struct {
-	StatusCode int
-	Status     string
-	Body       string
+	StatusCode  int
+	Status      string
+	ContentType string
+	Body        string
 }
 
-// client ist unser wiederverwendbarer HTTP-Client mit Timeout.
-// package-level Variable: existiert einmal für das gesamte Paket.
 var client = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
-// Get schickt einen HTTP GET Request an die angegebene URL.
-// Gibt (Response, nil) bei Erfolg oder (Response{}, error) bei Fehler zurück.
-// Das ist das Standard Go-Idiom: (Wert, Fehler) als Rückgabe.
-func Get(url string) (Response, error) {
-	resp, err := client.Get(url)
+// Do schickt einen HTTP Request mit beliebiger Method und optionalem Body.
+// Body kann leer sein (für GET, DELETE). Bei gesetztem Body wird
+// Content-Type: application/json automatisch gesetzt.
+func Do(method, url, body string) (Response, error) {
+	var reqBody io.Reader
+	if body != "" {
+		reqBody = strings.NewReader(body)
+	}
+
+	req, err := http.NewRequest(method, url, reqBody)
+	if err != nil {
+		return Response{}, fmt.Errorf("request erstellen fehlgeschlagen: %w", err)
+	}
+
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return Response{}, fmt.Errorf("request fehlgeschlagen: %w", err)
 	}
-	defer resp.Body.Close() // defer = "führe das aus wenn die Funktion endet" — wichtig gegen Memory Leaks
+	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return Response{}, fmt.Errorf("body lesen fehlgeschlagen: %w", err)
 	}
 
 	return Response{
-		StatusCode: resp.StatusCode,
-		Status:     resp.Status,
-		Body:       string(body),
+		StatusCode:  resp.StatusCode,
+		Status:      resp.Status,
+		ContentType: resp.Header.Get("Content-Type"),
+		Body:        string(respBody),
 	}, nil
 }

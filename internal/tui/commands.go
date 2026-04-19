@@ -3,27 +3,32 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/PsydoV2/Apish/internal/config"
 	"github.com/PsydoV2/Apish/internal/httpclient"
 )
 
-// responseMsg ist unsere eigene tea.Msg — ein einfaches Struct.
-// Bubble Tea schickt es an Update() wenn der HTTP-Call fertig ist.
+// responseMsg trägt das Ergebnis eines HTTP-Calls zurück an Update().
 type responseMsg struct {
 	response httpclient.Response
 	err      error
 }
 
-// sendGetRequest gibt eine tea.Cmd zurück.
-//
-// tea.Cmd ist definiert als: type Cmd func() Msg
-// Das heißt: wir geben eine Funktion zurück, die Bubble Tea
-// in einer separaten Goroutine ausführt — non-blocking!
-//
-// Die innere Funktion "schließt über" url — das ist eine Closure:
-// sie merkt sich den Wert von url auch wenn sendGetRequest längst zurückgekehrt ist.
-func sendGetRequest(url string) tea.Cmd {
+// historySavedMsg signalisiert dass die History gespeichert wurde.
+// err ist nil bei Erfolg — wir loggen Fehler im Update still weg.
+type historySavedMsg struct{ err error }
+
+// sendRequest führt den HTTP-Call asynchron aus.
+func sendRequest(method, url, body string) tea.Cmd {
 	return func() tea.Msg {
-		resp, err := httpclient.Get(url)
+		resp, err := httpclient.Do(method, url, body)
 		return responseMsg{response: resp, err: err}
+	}
+}
+
+// saveHistoryCmd schreibt die History asynchron in die Datei.
+// Wir blockieren nie den UI-Thread für Disk-I/O.
+func saveHistoryCmd(h config.History) tea.Cmd {
+	return func() tea.Msg {
+		return historySavedMsg{err: config.SaveHistory(h)}
 	}
 }
