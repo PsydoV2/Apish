@@ -2,9 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/PsydoV2/Apish/internal/webhook"
 )
 
 func (m Model) View() string {
@@ -16,6 +19,10 @@ func (m Model) View() string {
 		return appStyle.Render(viewRequest(m))
 	case responseView:
 		return appStyle.Render(viewResponse(m))
+	case webhookSetupView:
+		return appStyle.Render(viewWebhookSetup(m))
+	case webhookLiveView:
+		return appStyle.Render(viewWebhookLive(m))
 	default:
 		return appStyle.Render(viewMenu(m))
 	}
@@ -281,4 +288,155 @@ func viewResponse(m Model) string {
 			keyBind("Esc", "back"),
 		),
 	))
+}
+
+// ── Webhook Setup ─────────────────────────────────────────────────────────────
+
+func viewWebhookSetup(m Model) string {
+	errLine := ""
+	if m.webhookErr != nil {
+		errLine = errorStyle.Render("  " + m.webhookErr.Error())
+	}
+
+	rows := []string{
+		header(),
+		"",
+		titleStyle.Render("Webhook Catcher"),
+		"",
+		subtitleStyle.Render("Start a local HTTP server and capture incoming requests."),
+		subtitleStyle.Render("Works with Stripe, GitHub, or any webhook integration."),
+		"",
+		labelStyle.Render("Port"),
+		m.webhookPortInput.View(),
+	}
+	if errLine != "" {
+		rows = append(rows, "", errLine)
+	}
+	rows = append(rows, "",
+		wrapKeyBar(m.width-horizontalOverhead,
+			keyBind("Enter", "start"),
+			keyBind("Esc", "back"),
+		),
+	)
+	return panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
+}
+
+// ── Webhook Live ──────────────────────────────────────────────────────────────
+
+func viewWebhookLive(m Model) string {
+	if m.webhookDetail && len(m.webhookRequests) > 0 {
+		return viewWebhookDetail(m)
+	}
+	return viewWebhookList(m)
+}
+
+func viewWebhookList(m Model) string {
+	var content string
+	if len(m.webhookRequests) == 0 {
+		content = subtitleStyle.Render("  Waiting for requests on :" + strconv.Itoa(m.webhookPort) + " ...")
+	} else {
+		lines := []string{
+			lipgloss.JoinHorizontal(lipgloss.Left,
+				labelStyle.Width(9).Render("METHOD"),
+				labelStyle.Width(42).Render("PATH"),
+				labelStyle.Render("TIME"),
+			),
+			subtitleStyle.Render(strings.Repeat("─", 62)),
+		}
+		for i, req := range m.webhookRequests {
+			selected := i == m.webhookCursor
+			path := req.Path
+			if len(path) > 40 {
+				path = path[:37] + "..."
+			}
+			t := req.Time.Format("15:04:05")
+			if selected {
+				lines = append(lines,
+					cursorStyle.Render("> ")+lipgloss.JoinHorizontal(lipgloss.Left,
+						selectedItemStyle.Width(9).Render(req.Method),
+						selectedItemStyle.Width(42).Render(path),
+						selectedItemStyle.Render(t),
+					),
+				)
+			} else {
+				lines = append(lines,
+					"  "+lipgloss.JoinHorizontal(lipgloss.Left,
+						normalItemStyle.Width(9).Render(req.Method),
+						normalItemStyle.Width(42).Render(path),
+						subtitleStyle.Render(t),
+					),
+				)
+			}
+		}
+		content = strings.Join(lines, "\n")
+	}
+
+	return panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Center,
+			titleStyle.Render("Webhook Catcher"),
+			"  ",
+			subtitleStyle.Render(fmt.Sprintf("listening on :%d", m.webhookPort)),
+		),
+		"",
+		content,
+		"",
+		wrapKeyBar(m.width-horizontalOverhead,
+			keyBind("j/k", "navigate"),
+			keyBind("Enter", "detail"),
+			keyBind("s", "stop"),
+		),
+	))
+}
+
+func viewWebhookDetail(m Model) string {
+	req := m.webhookRequests[m.webhookCursor]
+
+	moreIndicator := ""
+	if !m.webhookVP.AtBottom() {
+		moreIndicator = subtitleStyle.Render("  ▼  scroll for more")
+	}
+
+	return panelStyle.Render(lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Center,
+			methodActiveStyle.Render(req.Method),
+			"  ",
+			normalItemStyle.Render(req.Path),
+			"  ",
+			subtitleStyle.Render(req.Time.Format("15:04:05")),
+		),
+		"",
+		m.webhookVP.View(),
+		moreIndicator,
+		"",
+		wrapKeyBar(m.width-horizontalOverhead,
+			keyBind("j/k", "scroll"),
+			keyBind("PgUp/PgDn", "page"),
+			keyBind("Esc", "back"),
+		),
+	))
+}
+
+// renderWebhookDetail builds the viewport content for a single captured request.
+// Headers first, then a syntax-highlighted body (if present).
+func renderWebhookDetail(req webhook.Request) string {
+	var sb strings.Builder
+
+	sb.WriteString(labelStyle.Render("Headers") + "\n\n")
+	for k, vals := range req.Headers {
+		for _, v := range vals {
+			sb.WriteString(fmt.Sprintf("  %s: %s\n",
+				subtitleStyle.Render(k),
+				normalItemStyle.Render(v),
+			))
+		}
+	}
+
+	if req.Body != "" {
+		sb.WriteString("\n")
+		sb.WriteString(labelStyle.Render("Body") + "\n\n")
+		ct := req.Headers.Get("Content-Type")
+		sb.WriteString(highlight(req.Body, ct))
+	}
+
+	return sb.String()
 }

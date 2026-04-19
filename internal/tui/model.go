@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/PsydoV2/Apish/internal/config"
+	"github.com/PsydoV2/Apish/internal/webhook"
 )
 
 type view int
@@ -15,15 +16,15 @@ const (
 	menuView view = iota
 	requestView
 	responseView
+	webhookSetupView
+	webhookLiveView
 )
 
-// field beschreibt welcher Bereich der Request-View aktiv ist.
-// Method ist kein eigenes Feld mehr — wird mit [/] aus der URL geändert.
 type field int
 
 const (
 	fieldURL  field = iota
-	fieldBody       // KV-Builder oder Raw-Textarea
+	fieldBody
 )
 
 var methods = []string{"GET", "POST", "PUT", "DELETE"}
@@ -42,7 +43,7 @@ type Model struct {
 	width      int
 	height     int
 
-	// Menü
+	// Menu
 	choices []string
 	cursor  int
 
@@ -50,15 +51,15 @@ type Model struct {
 	methodIdx   int
 	activeField field
 	urlInput    textinput.Model
-	history     config.History // persistierte History
-	historyIdx  int            // -1 = kein Browsing, sonst Index in history.Entries
+	history     config.History
+	historyIdx  int
 
 	// Body
 	bodyMode   bodyMode
 	kvPairs    []kvPair
 	kvCursor   int
 	kvEditing  bool
-	kvFocused  int // 0 = Key, 1 = Value
+	kvFocused  int
 	kvKeyInput textinput.Model
 	kvValInput textinput.Model
 	bodyInput  textarea.Model
@@ -73,10 +74,19 @@ type Model struct {
 	statusText    string
 	loading       bool
 	err           error
+
+	// Webhook — channels are reference types so model copies share the same channel
+	webhookPortInput textinput.Model
+	webhookCh        chan webhook.Request // incoming requests from server
+	webhookStop      chan struct{}        // close this to shut down the server
+	webhookRequests  []webhook.Request   // captured requests, newest first
+	webhookCursor    int
+	webhookDetail    bool           // true = showing detail of selected request
+	webhookVP        viewport.Model // scrolls the detail body
+	webhookPort      int
+	webhookErr       error
 }
 
-// New erstellt das initiale Model. history wird beim Start aus der Datei geladen
-// und hier übergeben — so bleibt das Model testbar ohne Dateisystem-Zugriff.
 func New(history config.History) Model {
 	ti := textinput.New()
 	ti.Placeholder = "https://api.example.com/users"
@@ -97,14 +107,22 @@ func New(history config.History) Model {
 	ta.SetHeight(8)
 	ta.ShowLineNumbers = false
 
+	port := textinput.New()
+	port.Placeholder = "8080"
+	port.SetValue("8080")
+	port.CharLimit = 5
+	port.Width = 10
+
 	return Model{
-		activeView:  menuView,
-		methodIdx:   0,
-		activeField: fieldURL,
-		historyIdx:  -1,
-		bodyMode:    bodyModeKV,
-		kvPairs:     []kvPair{},
-		history:     history,
+		activeView:       menuView,
+		methodIdx:        0,
+		activeField:      fieldURL,
+		historyIdx:       -1,
+		bodyMode:         bodyModeKV,
+		kvPairs:          []kvPair{},
+		history:          history,
+		webhookPort:      8080,
+		webhookPortInput: port,
 		choices: []string{
 			"Send API Request",
 			"Start Webhook Catcher",

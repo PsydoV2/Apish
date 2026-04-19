@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/PsydoV2/Apish/internal/config"
+	"github.com/PsydoV2/Apish/internal/webhook"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -40,6 +44,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport = vp
 		m.activeView = responseView
 		return m, nil
+
+	case webhookRequestMsg:
+		// Newest request prepended so index 0 is always the latest
+		req := webhook.Request(msg)
+		m.webhookRequests = append([]webhook.Request{req}, m.webhookRequests...)
+		// Re-issue the wait cmd — self-renewing event loop
+		return m, waitForWebhookCmd(m.webhookCh, m.webhookStop)
+
+	case webhookServerDoneMsg:
+		if msg.err != nil {
+			m.webhookErr = msg.err
+		}
+		m.activeView = menuView
+		return m, nil
 	}
 
 	switch m.activeView {
@@ -49,6 +67,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return updateRequest(m, msg)
 	case responseView:
 		return updateResponse(m, msg)
+	case webhookSetupView:
+		return updateWebhookSetup(m, msg)
+	case webhookLiveView:
+		return updateWebhookLive(m, msg)
 	}
 	return m, nil
 }
@@ -72,8 +94,11 @@ func updateMenu(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	case "enter":
-		if m.cursor == 0 {
+		switch m.cursor {
+		case 0:
 			return enterRequestView(m)
+		case 1:
+			return enterWebhookSetup(m)
 		}
 	}
 	return m, nil
@@ -415,6 +440,99 @@ func restoreHistoryEntry(m Model, entry config.HistoryEntry) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// ── Webhook Setup ─────────────────────────────────────────────────────────────
+
+func enterWebhookSetup(m Model) (Model, tea.Cmd) {
+	m.activeView = webhookSetupView
+	m.webhookRequests = nil
+	m.webhookCursor = 0
+	m.webhookDetail = false
+	m.webhookErr = nil
+	return m, m.webhookPortInput.Focus()
+}
+
+func updateWebhookSetup(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, isKey := msg.(tea.KeyMsg)
+	if isKey {
+		switch key.String() {
+		case "esc":
+			m.activeView = menuView
+			m.webhookPortInput.Blur()
+			return m, nil
+		case "enter":
+			port := parsePort(m.webhookPortInput.Value())
+			m.webhookPort = port
+			m.webhookCh = make(chan webhook.Request, 64)
+			m.webhookStop = make(chan struct{})
+			m.webhookVP = viewport.New(m.width-horizontalOverhead, m.height-verticalOverhead)
+			m.activeView = webhookLiveView
+			m.webhookPortInput.Blur()
+			return m, tea.Batch(
+				startWebhookServerCmd(port, m.webhookCh, m.webhookStop),
+				waitForWebhookCmd(m.webhookCh, m.webhookStop),
+			)
+		}
+	}
+	var cmd tea.Cmd
+	m.webhookPortInput, cmd = m.webhookPortInput.Update(msg)
+	return m, cmd
+}
+
+// ── Webhook Live ──────────────────────────────────────────────────────────────
+
+func updateWebhookLive(m Model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, isKey := msg.(tea.KeyMsg)
+	if isKey {
+		// Detail view: scroll viewport or go back to list
+		if m.webhookDetail {
+			switch key.String() {
+			case "esc", "q":
+				m.webhookDetail = false
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.webhookVP, cmd = m.webhookVP.Update(msg)
+			return m, cmd
+		}
+
+		// List view
+		switch key.String() {
+		case "up", "k":
+			if m.webhookCursor > 0 {
+				m.webhookCursor--
+			}
+		case "down", "j":
+			if m.webhookCursor < len(m.webhookRequests)-1 {
+				m.webhookCursor++
+			}
+		case "enter":
+			if len(m.webhookRequests) > 0 {
+				content := renderWebhookDetail(m.webhookRequests[m.webhookCursor])
+				m.webhookVP = viewport.New(m.width-horizontalOverhead, m.height-verticalOverhead)
+				m.webhookVP.SetContent(content)
+				m.webhookDetail = true
+			}
+		case "s", "esc":
+			// Shut down: close the stop channel — unblocks both the server and the wait cmd
+			if m.webhookStop != nil {
+				close(m.webhookStop)
+				m.webhookStop = nil
+			}
+			m.activeView = menuView
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+func parsePort(s string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 1 || n > 65535 {
+		return 8080
+	}
+	return n
 }
 
 // ── Response ──────────────────────────────────────────────────────────────────
