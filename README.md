@@ -1,21 +1,39 @@
 # 🐝 apish
 
-> **The Terminal-First API Client with a Brain.** `apish` is a lightweight, blazing-fast TUI built in Go — for developers who find Postman too heavy but `curl` too manual. It lives in your terminal, respects your RAM, and comes with superpowers you won't find anywhere else.
+> **The terminal-first API client with a brain.** Lighter than Postman, smarter than curl — a single binary that lives in your terminal and gets out of your way.
 
 ---
 
-### ✨ Why apish?
+## ✨ Why apish?
 
 Postman is too heavy. `curl` is too manual. `apish` is the sweet spot.
 
-- **Vim keybindings** — navigate requests like a pro
-- **Zero bloat** — single binary, no Electron, no nonsense
-- **Local-first** — your data stays on your machine
-- **Persistent history** — every request saved and restored, even across restarts
+- **Zero bloat** — single Go binary, no Electron, no Docker, no cloud account
+- **Local-first** — all data stays on your machine
+- **Keyboard-driven** — every action reachable without touching the mouse
+- **Persistent history** — every request saved and restored across restarts
 
 ---
 
-### 🚀 Installation
+## 🚀 Features
+
+| | |
+|---|---|
+| 🌐 **HTTP methods** | GET, POST, PUT, PATCH, DELETE — each with its own accent color |
+| 🔗 **Query params builder** | Add, edit and delete params in a KV editor; merged into the URL at send time |
+| 📋 **Request headers** | Per-request custom headers with the same KV interface |
+| 🔐 **Authentication** | Bearer token, HTTP Basic, or custom API Key header |
+| 📦 **Body editor** | Key-value builder (auto-generates JSON) or raw textarea — toggle with `r` |
+| 🌍 **Environments** | Named environments with `{{variable}}` placeholders resolved at send time |
+| 📥 **curl import** | Paste any `curl ...` command into the URL field — method, headers and body parsed automatically |
+| 📤 **curl export** | Copy the equivalent curl command to your clipboard in one keypress |
+| 🪝 **Webhook catcher** | Start a local HTTP listener; inspect incoming requests in real time |
+| ⏱ **Response metadata** | Status code, content type, response time and size for every request |
+| 🎨 **Syntax highlighting** | JSON, XML, HTML and YAML — adapts to your terminal color scheme |
+
+---
+
+## 📦 Installation
 
 ```bash
 go install github.com/PsydoV2/Apish/cmd/apish@latest
@@ -31,96 +49,137 @@ go build ./cmd/apish
 
 ---
 
-### ⌨️ Keybindings
+## ⌨️ Keybindings
 
-**Menu**
+### Menu
 
 | Key | Action |
 |---|---|
-| `j` / `k` | Navigate |
+| `j` / `k` | Move cursor |
 | `Enter` | Select |
 | `q` | Quit |
 
-**Request**
+---
+
+### Request view
+
+#### Method & URL
 
 | Key | Action |
 |---|---|
-| `F1` – `F4` | Switch method (GET / POST / PUT / DELETE) |
+| `F1` – `F5` | Switch method (GET / POST / PUT / PATCH / DELETE) |
 | `↑` / `↓` | Browse history |
-| `Tab` | Focus URL → Body |
-| `Enter` | Send (GET/DELETE) or go to body (POST/PUT) |
+| `Tab` | Next section — URL → Params → Headers → Auth → Body |
+| `Esc` | Previous section |
+| `Enter` | Send (GET / DELETE) or jump to body (POST / PUT / PATCH) |
 | `ctrl+s` | Send from anywhere |
-| `Esc` | Back |
+| `ctrl+y` | Copy curl command to clipboard |
 
-**Body — KV Builder**
+> Paste a `curl ...` command into the URL field and press `Enter` to import the full request automatically.
+
+#### Query Params & Request Headers
+
+| Key | Action |
+|---|---|
+| `n` | Add entry |
+| `d` | Delete selected |
+| `Enter` | Edit selected |
+| `Tab` | Switch Key ↔ Value while editing |
+| `Esc` | Cancel / back |
+
+#### Auth
+
+| Key | Action |
+|---|---|
+| `1` | No auth |
+| `2` | Bearer token |
+| `3` | HTTP Basic (username + password) |
+| `4` | API Key (custom header name + value) |
+
+> Sensitive fields (token, password, API key value) are masked with `•` while typing.
+
+#### Body *(POST / PUT / PATCH only)*
 
 | Key | Action |
 |---|---|
 | `n` | Add field |
 | `d` | Delete selected |
 | `Enter` | Edit selected |
-| `Tab` | Switch Key ↔ Value |
-| `r` | Toggle raw JSON mode |
-| `Tab` / `Esc` | Back to URL |
+| `r` | Toggle KV builder ↔ raw JSON |
 
-**Response**
+---
+
+### Response view
 
 | Key | Action |
 |---|---|
 | `j` / `k` | Scroll |
-| `PgUp` / `PgDn` | Page up / down |
-| `e` | Edit URL |
+| `PgUp` / `PgDn` | Page scroll |
+| `h` | Toggle response headers |
+| `c` | Copy curl command to clipboard |
+| `e` | Back to request editor |
 | `Esc` | Back to menu |
 
 ---
 
-### 🗺 Roadmap
+### Webhook catcher
 
-#### ✅ Phase 1 — The Core
+Start a local HTTP server on any port. Incoming requests stream into a live list — select one to inspect the full headers and body.
 
-- GET, POST, PUT, DELETE requests
-- Key-Value body builder with automatic JSON generation
-- Raw JSON editor as fallback
-- Syntax highlighting for JSON, XML, HTML, YAML — adapts to your terminal theme
-- Scrollable response view with status codes color-coded
-- Persistent request history — URL, method, and body all restored on `↑`
-
-#### 🔥 Phase 2 — Webhook Catcher *(coming next)*
-
-Don't just send requests — receive them. Start a local listener with one keypress and inspect incoming webhooks from Stripe, GitHub, or your own microservices in a beautiful interface.
-
-#### 🤖 Phase 3 — Local AI Debugger
-
-Integrated with **Ollama**. When a request fails, `apish` analyses the headers and body locally on your machine. It tells you exactly *why* it failed — without ever sending data to the cloud.
-
-#### 📡 Phase 4 — Instant Sharing
-
-Press one key and `apish` uploads the request/response pair to your private VPS and copies a shareable link to your clipboard. No more copy-pasting JSON blocks into Slack.
+| Key | Action |
+|---|---|
+| `Enter` | View request detail |
+| `Esc` | Stop server and return |
 
 ---
 
-### 💻 Tech Stack
+### Environments
+
+Define named environments with key-value variables. Any `{{variableName}}` in a URL, header, or body is replaced with the matching value from the active environment at send time.
+
+| Key | Action |
+|---|---|
+| `n` | New environment |
+| `Enter` | Edit selected |
+| `Space` | Set as active |
+| `d` | Delete selected |
+| `Esc` | Back to menu |
+
+Inside the editor:
+
+| Key | Action |
+|---|---|
+| `Tab` | Switch between name field and variable list |
+| `n` | Add variable |
+| `d` | Delete selected variable |
+| `Enter` | Edit selected variable |
+| `ctrl+s` | Save and return |
+| `Esc` | Discard and return |
+
+---
+
+## 📁 Local data
+
+All data is stored on your machine — nothing leaves without your action.
+
+| File | Content |
+|---|---|
+| `~/.config/apish/history.json` | Sent request history (up to 100 entries) |
+| `~/.config/apish/envs.json` | Environment definitions and active index |
+
+> On Windows: `%AppData%\apish\`
+
+---
+
+## 💻 Tech stack
 
 | | |
 |---|---|
 | Language | Go ≥ 1.22 |
-| TUI Framework | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
+| TUI framework | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
 | Styling | [Lip Gloss](https://github.com/charmbracelet/lipgloss) |
-| Syntax Highlighting | [Chroma](https://github.com/alecthomas/chroma) |
-| AI *(planned)* | Ollama |
-
----
-
-### 📁 History File
-
-Every request you send is saved locally:
-
-| OS | Path |
-|---|---|
-| Linux / macOS | `~/.config/apish/history.json` |
-| Windows | `%AppData%\apish\history.json` |
-
-Up to 100 entries. Browse with `↑` / `↓` in the URL field — restores the full request including method and body.
+| Syntax highlighting | [Chroma](https://github.com/alecthomas/chroma) |
+| Clipboard | [atotto/clipboard](https://github.com/atotto/clipboard) |
 
 ---
 

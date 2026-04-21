@@ -8,22 +8,21 @@ import (
 	"time"
 )
 
-// Response kapselt alles was wir von einem HTTP-Call zurückbekommen.
 type Response struct {
 	StatusCode  int
 	Status      string
 	ContentType string
+	Headers     http.Header
 	Body        string
+	Duration    time.Duration
+	Size        int
 }
 
 var client = &http.Client{
 	Timeout: 15 * time.Second,
 }
 
-// Do schickt einen HTTP Request mit beliebiger Method und optionalem Body.
-// Body kann leer sein (für GET, DELETE). Bei gesetztem Body wird
-// Content-Type: application/json automatisch gesetzt.
-func Do(method, url, body string) (Response, error) {
+func Do(method, url, body string, extraHeaders map[string]string) (Response, error) {
 	var reqBody io.Reader
 	if body != "" {
 		reqBody = strings.NewReader(body)
@@ -38,7 +37,15 @@ func Do(method, url, body string) (Response, error) {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
+	for k, v := range extraHeaders {
+		if k != "" {
+			req.Header.Set(k, v)
+		}
+	}
+
+	start := time.Now()
 	resp, err := client.Do(req)
+	duration := time.Since(start)
 	if err != nil {
 		return Response{}, fmt.Errorf("request fehlgeschlagen: %w", err)
 	}
@@ -53,6 +60,9 @@ func Do(method, url, body string) (Response, error) {
 		StatusCode:  resp.StatusCode,
 		Status:      resp.Status,
 		ContentType: resp.Header.Get("Content-Type"),
+		Headers:     resp.Header,
 		Body:        string(respBody),
+		Duration:    duration,
+		Size:        len(respBody),
 	}, nil
 }

@@ -2,28 +2,45 @@ package tui
 
 import "github.com/charmbracelet/lipgloss"
 
-// AdaptiveColor: Light = heller Hintergrund, Dark = dunkler Hintergrund.
-// Lip Gloss erkennt das Terminal-Theme automatisch via COLORFGBG oder OSC-Query.
 var (
-	colorPrimary = lipgloss.AdaptiveColor{Light: "#5B21B6", Dark: "#A78BFA"} // lila: dunkler/heller je nach BG
-	colorGreen   = lipgloss.AdaptiveColor{Light: "#065F46", Dark: "#34D399"}
-	colorYellow  = lipgloss.AdaptiveColor{Light: "#92400E", Dark: "#FCD34D"}
-	colorRed     = lipgloss.AdaptiveColor{Light: "#991B1B", Dark: "#F87171"}
-	colorMuted   = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"}
-	colorText    = lipgloss.AdaptiveColor{Light: "#111827", Dark: "#F9FAFB"}
-	colorBorder  = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"}
+	colorPrimary = lipgloss.AdaptiveColor{Light: "#5B21B6", Dark: "#A78BFA"} // violet (PATCH, UI accent)
+	colorGreen   = lipgloss.AdaptiveColor{Light: "#065F46", Dark: "#34D399"} // GET, 2xx
+	colorYellow  = lipgloss.AdaptiveColor{Light: "#92400E", Dark: "#FCD34D"} // POST, 3xx, loading
+	colorBlue    = lipgloss.AdaptiveColor{Light: "#1E40AF", Dark: "#93C5FD"} // PUT
+	colorRed     = lipgloss.AdaptiveColor{Light: "#991B1B", Dark: "#F87171"} // DELETE, 4xx/5xx, errors
+	colorMuted   = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#9CA3AF"} // subtitles, inactive
+	colorText    = lipgloss.AdaptiveColor{Light: "#111827", Dark: "#F9FAFB"} // primary text
+	colorBorder  = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"} // panel border
+	colorTeal    = lipgloss.AdaptiveColor{Light: "#0F766E", Dark: "#2DD4BF"} // environment badge
 )
 
-// --- Layout ---
+// methodColor returns the accent color for each HTTP method.
+func methodColor(method string) lipgloss.TerminalColor {
+	switch method {
+	case "GET":
+		return colorGreen
+	case "POST":
+		return colorYellow
+	case "PUT":
+		return colorBlue
+	case "PATCH":
+		return colorPrimary
+	case "DELETE":
+		return colorRed
+	}
+	return colorMuted
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
 
 var appStyle = lipgloss.NewStyle().Padding(1, 2)
 
 var panelStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder()).
 	BorderForeground(colorBorder).
-	Padding(1, 2)
+	Padding(1, 3)
 
-// --- Text ---
+// ── Text ──────────────────────────────────────────────────────────────────────
 
 var titleStyle = lipgloss.NewStyle().
 	Bold(true).
@@ -32,75 +49,113 @@ var titleStyle = lipgloss.NewStyle().
 var subtitleStyle = lipgloss.NewStyle().
 	Foreground(colorMuted)
 
-var helpStyle = lipgloss.NewStyle().
-	Foreground(colorMuted)
+var labelStyle = lipgloss.NewStyle().
+	Foreground(colorMuted).
+	Bold(true)
 
-// keyStyle: der Key selbst — Badge mit Rounded Border und Padding
+// ── Key bar ───────────────────────────────────────────────────────────────────
+
 var keyStyle = lipgloss.NewStyle().
 	Foreground(colorText).
 	Border(lipgloss.RoundedBorder()).
 	BorderForeground(colorBorder).
 	Padding(0, 1)
 
-// keyDescStyle: die Beschreibung zum Key — gedimmt
-var keyDescStyle = lipgloss.NewStyle().
-	Foreground(colorMuted)
+var keyDescStyle = lipgloss.NewStyle().Foreground(colorMuted)
 
-// --- Menü ---
+// ── Menu / lists ──────────────────────────────────────────────────────────────
 
 var selectedItemStyle = lipgloss.NewStyle().
 	Foreground(colorPrimary).
 	Bold(true)
 
-var normalItemStyle = lipgloss.NewStyle().
-	Foreground(colorText)
+var normalItemStyle = lipgloss.NewStyle().Foreground(colorText)
 
 var cursorStyle = lipgloss.NewStyle().
 	Foreground(colorPrimary).
 	Bold(true)
 
-// --- Request ---
-
-var labelStyle = lipgloss.NewStyle().
-	Foreground(colorMuted).
-	Bold(true)
+// ── Request ───────────────────────────────────────────────────────────────────
 
 var loadingStyle = lipgloss.NewStyle().
 	Foreground(colorYellow).
 	Italic(true)
 
-// methodActiveStyle: die aktuell gewählte HTTP-Methode
-var methodActiveStyle = lipgloss.NewStyle().
-	Foreground(colorText).
-	Border(lipgloss.RoundedBorder()).
-	BorderForeground(colorPrimary).
-	Padding(0, 1)
-
-// methodInactiveStyle: alle anderen Methoden
-var methodInactiveStyle = lipgloss.NewStyle().
-	Foreground(colorMuted).
-	Padding(0, 1)
-
-// --- Response ---
-
-func statusStyle(code int) lipgloss.Style {
-	switch {
-	case code >= 200 && code < 300:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorGreen)
-	case code >= 300 && code < 400:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorYellow)
-	default:
-		return lipgloss.NewStyle().Bold(true).Foreground(colorRed)
+// methodBadge renders a single HTTP method badge with its own accent color when active.
+func methodBadge(method string, active bool) string {
+	if !active {
+		return lipgloss.NewStyle().
+			Foreground(colorMuted).
+			Padding(0, 1).
+			Render(method)
 	}
+	color := methodColor(method)
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(color).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(color).
+		Padding(0, 1).
+		Render(method)
 }
 
-var bodyStyle = lipgloss.NewStyle().
-	Foreground(colorText)
+// ── Accordion sections ────────────────────────────────────────────────────────
+
+// collapsedSection renders a one-line summary for an inactive section.
+func collapsedSection(name, summary string) string {
+	arrow := subtitleStyle.Render("  ▸  ")
+	label := labelStyle.Width(9).Render(name)
+	return arrow + label + subtitleStyle.Render(summary)
+}
+
+// expandedSectionHeader renders the header row of the currently active section.
+func expandedSectionHeader(name string) string {
+	arrow := titleStyle.Render("  ▾  ")
+	return arrow + titleStyle.Render(name)
+}
+
+// ── Response ──────────────────────────────────────────────────────────────────
+
+// statusBadge renders a background-colored status pill.
+func statusBadge(code int, text string) string {
+	var bg, fg lipgloss.TerminalColor
+	switch {
+	case code >= 200 && code < 300:
+		bg = lipgloss.AdaptiveColor{Light: "#D1FAE5", Dark: "#064E3B"}
+		fg = lipgloss.AdaptiveColor{Light: "#065F46", Dark: "#6EE7B7"}
+	case code >= 300 && code < 400:
+		bg = lipgloss.AdaptiveColor{Light: "#FEF3C7", Dark: "#451A03"}
+		fg = lipgloss.AdaptiveColor{Light: "#92400E", Dark: "#FCD34D"}
+	default:
+		bg = lipgloss.AdaptiveColor{Light: "#FEE2E2", Dark: "#450A0A"}
+		fg = lipgloss.AdaptiveColor{Light: "#991B1B", Dark: "#FCA5A5"}
+	}
+	return lipgloss.NewStyle().
+		Bold(true).
+		Background(bg).
+		Foreground(fg).
+		Padding(0, 1).
+		Render(text)
+}
+
+// methodLabel renders a colored method name for the response view.
+func methodLabel(method string) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(methodColor(method)).
+		Render(method)
+}
 
 var errorStyle = lipgloss.NewStyle().
 	Foreground(colorRed).
 	Bold(true)
 
-var truncatedStyle = lipgloss.NewStyle().
-	Foreground(colorMuted).
-	Italic(true)
+var successStyle = lipgloss.NewStyle().
+	Foreground(colorGreen).
+	Bold(true)
+
+var envBadgeStyle = lipgloss.NewStyle().
+	Foreground(colorTeal).
+	Border(lipgloss.RoundedBorder()).
+	BorderForeground(colorTeal).
+	Padding(0, 1)
